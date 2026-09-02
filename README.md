@@ -62,6 +62,8 @@ to a local k3s cluster, reachable at `https://sample-app.accelerator.test`.
 - nginx VM reverse-proxy config + local HTTPS trust steps: [infra/nginx-vm/README.md](infra/nginx-vm/README.md)
 - Full design (spec, plan, research, task breakdown): [specs/001-cicd-k3s-deploy/](specs/001-cicd-k3s-deploy/)
 
+<p align="center"><img src="docs/images/meme.jpg" alt="Мы сделали огромную фичу — не сильно ебался?" width="250"></p>
+
 ---
 
 # Accelerator Core
