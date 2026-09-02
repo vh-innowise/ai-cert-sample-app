@@ -1,0 +1,203 @@
+name: CI
+
+# Runs on every push and pull request against the default branch (FR-001).
+# See specs/001-cicd-k3s-deploy/contracts/ci-pipeline-contract.md for the full contract this
+# workflow implements (job names, gates, and outputs are part of that contract).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: sample-app
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint:backend
+      - run: npm run lint:frontend
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # p/ci + p/owasp-top-ten need no license/login (research.md §3) — chosen specifically so
+      # this SAST gate doesn't depend on GitHub Advanced Security entitlement, unlike CodeQL's
+      # default private-repo setup.
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: |
+            p/ci
+            p/owasp-top-ten
+
+  # Validates the workflow YAML and Kubernetes manifests themselves (research.md §12) —
+  # independent of the other jobs; catches structural mistakes before they reach the
+  # self-hosted runner or the cluster.
+  validate-infra:
+    name: Validate workflows & manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          fail_level: error
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Validate Kubernetes manifests (kubeconform)
+        run: |
+          find deploy/k8s -maxdepth 1 -name '*.yaml' ! -name 'kustomization.yaml' -print0 \
+            | xargs -0 kubeconform -strict -summary
+
+  build-and-scan:
+    name: Build & Scan
+    runs-on: ubuntu-latest
+    needs: [lint, sast]
+    permissions:
+      contents: read
+      security-events: write # required to upload Trivy SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.APP_NAME }}-backend:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/frontend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.APP_NAME }}-frontend:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      # --- Trivy report pass: always runs, every severity, never blocks (FR-007) ---
+      - name: Trivy report - backend
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.APP_NAME }}-backend:${{ github.sha }}
+          format: sarif
+          output: trivy-backend-report.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+          trivyignores: .trivyignore
+
+      - name: Trivy report - frontend
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.APP_NAME }}-frontend:${{ github.sha }}
+          format: sarif
+          output: trivy-frontend-report.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy SARIF - backend
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-backend-report.sarif
+          category: trivy-backend
+
+      - name: Upload Trivy SARIF - frontend
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend-report.sarif
+          category: trivy-frontend
+
+      # --- Trivy gate pass: CRITICAL only, blocks the job (and thus publish) on failure (FR-006) ---
+      - name: Trivy CRITICAL gate - backend
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.APP_NAME }}-backend:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+          trivyignores: .trivyignore
+
+      - name: Trivy CRITICAL gate - frontend
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.APP_NAME }}-frontend:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+          trivyignores: .trivyignore
+
+  publish:
+    name: Publish to GHCR
+    runs-on: ubuntu-latest
+    needs: build-and-scan
+    # Push events to the default branch can only originate from the repository itself (a fork
+    # can't push to upstream's main), so this condition alone keeps GHCR credentials away from
+    # fork-originated pull_request runs (FR-009) without an extra repository-identity check.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Rebuilds from the same Dockerfile/context/cache as build-and-scan (type=gha cache means
+      # this reuses those layers rather than re-executing them) so the pushed image is the same
+      # content that was just scanned and gated — not a second, unscanned build.
+      - name: Build & push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.APP_NAME }}-backend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.APP_NAME }}-backend:main
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.APP_NAME }}-frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.APP_NAME }}-frontend:main
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

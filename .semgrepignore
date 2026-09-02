@@ -1,0 +1,18 @@
+# Scope Semgrep SAST (User Story 1) to application source; skip generated code, build output,
+# dependencies, and test fixtures.
+node_modules/
+dist/
+build/
+apps/backend/generated/
+coverage/
+
+**/*.spec.ts
+**/*.test.tsx
+**/*.test.ts
+
+.specify/
+.claude/
+specs/
+tasks/
+examples/
+docs/

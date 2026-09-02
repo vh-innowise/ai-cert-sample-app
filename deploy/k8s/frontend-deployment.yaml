@@ -1,0 +1,41 @@
+# Image tag is a placeholder — `kustomize edit set image` retargets it to the newly published
+# <commit_sha> tag in .github/workflows/deploy.yml (research.md §7). Do not edit the tag by hand.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: sample-app
+    component: frontend
+spec:
+  replicas: 1
+  # Recreate (not RollingUpdate): guarantees exactly one live version at a time (research.md §8).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sample-app
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: sample-app
+        component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/OWNER/sample-app-frontend:placeholder
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15

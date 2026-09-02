@@ -1,0 +1,22 @@
+# Wraps the manifests below so `.github/workflows/deploy.yml` can retarget the backend/frontend
+# image tags via `kustomize edit set image` without hand-editing the Deployment YAML
+# (research.md §7). "OWNER" here is a literal placeholder string, not a real value — deploy.yml
+# replaces both the name and tag with the real ghcr.io/<owner>/... reference at deploy time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - app-config.yaml
+  - postgres-pvc.yaml
+  - postgres-deployment.yaml
+  - postgres-service.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+
+images:
+  - name: ghcr.io/OWNER/sample-app-backend
+    newTag: placeholder
+  - name: ghcr.io/OWNER/sample-app-frontend
+    newTag: placeholder

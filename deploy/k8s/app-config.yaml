@@ -1,0 +1,11 @@
+# Non-secret backend env (data-model.md §4). DATABASE_URL/JWT_ACCESS_SECRET/etc. live in the
+# app-secrets Secret, created out-of-band per deploy/README.md — never committed here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    app: sample-app
+data:
+  NODE_ENV: "production"
+  PORT: "3000"

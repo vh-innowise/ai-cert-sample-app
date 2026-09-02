@@ -1,0 +1,48 @@
+# Image tag is a placeholder — `kustomize edit set image` retargets it to the newly published
+# <commit_sha> tag in .github/workflows/deploy.yml (research.md §7). Do not edit the tag by hand.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: sample-app
+    component: backend
+spec:
+  replicas: 1
+  # Recreate (not RollingUpdate): guarantees exactly one live version at a time — RollingUpdate
+  # briefly runs old and new pods together, which would violate FR-012/SC-005 (research.md §8).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sample-app
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: sample-app
+        component: backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/OWNER/sample-app-backend:placeholder
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          # GET / is @Public() (apps/backend/src/app.controller.ts) — safe to probe unauthenticated.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 15

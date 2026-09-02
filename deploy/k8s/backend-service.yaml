@@ -1,0 +1,19 @@
+# ClusterIP only — the backend is never exposed outside the cluster directly. External traffic
+# reaches it via the frontend container's nginx, which proxies /api and /uploads to this Service
+# by name ("backend" — see apps/frontend/nginx.conf); only the frontend Service needs a NodePort
+# (deployment-access-contract.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: sample-app
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: sample-app
+    component: backend
+  ports:
+    - port: 3000
+      targetPort: 3000

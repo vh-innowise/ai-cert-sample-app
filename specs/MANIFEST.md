@@ -11,11 +11,16 @@ npm-workspaces monorepo for a NestJS + React training/coaching platform: `apps/b
 | api-designer-spec.md | Endpoints, schemas, authentication | architect-architecture | - |
 | frontend-design-spec.md | Pages, components, state management | architect-architecture, api-designer-spec | - |
 | docs-generator-implementation.md | Build process, deployment, tooling | - | 2026-07-23 |
+| [001-cicd-k3s-deploy/spec.md](001-cicd-k3s-deploy/spec.md) | CI/CD pipeline (lint/SAST/Trivy/GHCR) + self-hosted-runner deploy to local k3s + local HTTPS access | architect-architecture | 2026-09-02 |
 
 ## Key Decisions
 
 - Backend: Layered Architecture (Controller → Service → Repository) per module under `apps/backend/src/modules/`.
 - [TASK-009] Local dev environment is containerized via root `docker-compose.yml` (Postgres + backend + frontend), dev-only — see architect-architecture.md.
+- [001-cicd-k3s-deploy] Production deploys use a separate `apps/{backend,frontend}/Dockerfile`
+  (multi-stage, prod-only) alongside the existing dev-only `Dockerfile.dev`; k8s manifests use
+  plain Kustomize (not Helm) under `deploy/k8s/`, with `Recreate` rollouts so exactly one app
+  version is ever live — see `001-cicd-k3s-deploy/research.md` and `deploy/README.md`.
 
 ## Tech Stack
 

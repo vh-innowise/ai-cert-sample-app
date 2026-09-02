@@ -1,0 +1,66 @@
+# Single-replica PostgreSQL 16 for the deployed sample app (research.md §11) — same engine/
+# version as local dev's docker-compose.yml, no schema changes. Credentials come from the
+# out-of-band app-secrets Secret (deploy/README.md), never committed here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: sample-app
+    component: postgres
+spec:
+  replicas: 1
+  # Recreate (not the k8s default RollingUpdate): a single-instance stateful Postgres backed by
+  # one PVC (ReadWriteOnce) can't run two pods at once anyway — RollingUpdate would just fail to
+  # schedule the new pod until the old one releases the volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sample-app
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: sample-app
+        component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_DB
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc

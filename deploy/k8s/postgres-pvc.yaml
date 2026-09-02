@@ -1,0 +1,15 @@
+# PersistentVolumeClaim for the in-cluster PostgreSQL 16 instance (research.md §11), backed by
+# k3s's default local-path StorageClass.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    app: sample-app
+    component: postgres
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi

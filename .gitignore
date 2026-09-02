@@ -21,3 +21,10 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Kubernetes / cluster credentials (never commit real secrets)
+*.secret.yaml
+.kube/
+kubeconfig*
+*.key
+*.crt

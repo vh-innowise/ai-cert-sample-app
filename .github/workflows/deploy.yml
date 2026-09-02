@@ -1,0 +1,69 @@
+name: Deploy to Local k3s
+
+# Only runs after CI has succeeded on the default branch (never for pull_request runs) — see
+# specs/001-cicd-k3s-deploy/contracts/deployment-access-contract.md.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    if: github.event.workflow_run.conclusion == 'success'
+    # Must run on a runner with direct network access to the local k3s cluster — a GitHub-hosted
+    # runner cannot reach it (research.md §6). Registered per deploy/README.md §2.
+    runs-on: [self-hosted, k3s-local]
+    timeout-minutes: 10
+    env:
+      IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Write kubeconfig
+        run: |
+          mkdir -p "${RUNNER_TEMP}/.kube"
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "${RUNNER_TEMP}/.kube/config"
+          chmod 600 "${RUNNER_TEMP}/.kube/config"
+          echo "KUBECONFIG=${RUNNER_TEMP}/.kube/config" >> "$GITHUB_ENV"
+
+      # FR-013: fail loudly and immediately rather than letting a later step time out obscurely.
+      - name: Verify cluster connectivity
+        run: |
+          if ! kubectl cluster-info --request-timeout=10s; then
+            echo "::error::Cannot reach the k3s cluster with the configured KUBECONFIG secret — check runner network access and secret validity."
+            exit 1
+          fi
+
+      - name: Set image tags
+        working-directory: deploy/k8s
+        run: |
+          kustomize edit set image \
+            "ghcr.io/OWNER/sample-app-backend=ghcr.io/${{ github.repository_owner }}/sample-app-backend:${IMAGE_SHA}" \
+            "ghcr.io/OWNER/sample-app-frontend=ghcr.io/${{ github.repository_owner }}/sample-app-frontend:${IMAGE_SHA}"
+
+      - name: Deploy to cluster
+        run: kubectl apply -k deploy/k8s/
+
+      # Recreate strategy (research.md §8) means this naturally waits through the old pod's
+      # termination before the new one becomes Ready — a non-zero exit here means the rollout
+      # genuinely failed, not just "still in progress" (FR-011, FR-012).
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/backend --timeout=180s
+          kubectl rollout status deployment/frontend --timeout=180s
+
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/.kube/config"

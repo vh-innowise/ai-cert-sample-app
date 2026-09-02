@@ -52,6 +52,16 @@ npm run docker:up:build
 
 For more details, see [docs/adr/ADR-001-containerized-dev-environment.md](docs/adr/ADR-001-containerized-dev-environment.md) and [specs/docs-generator-implementation.md](specs/docs-generator-implementation.md).
 
+## CI/CD & Local k3s Deployment
+
+Every push/PR runs an automated lint + SAST + Trivy-gated build, publishing container images to
+GitHub Container Registry on the default branch. A self-hosted runner then deploys the new images
+to a local k3s cluster, reachable at `https://sample-app.accelerator.test`.
+
+- One-time setup (repo variables/secrets, self-hosted runner, cluster secrets): [deploy/README.md](deploy/README.md)
+- nginx VM reverse-proxy config + local HTTPS trust steps: [infra/nginx-vm/README.md](infra/nginx-vm/README.md)
+- Full design (spec, plan, research, task breakdown): [specs/001-cicd-k3s-deploy/](specs/001-cicd-k3s-deploy/)
+
 ---
 
 # Accelerator Core
