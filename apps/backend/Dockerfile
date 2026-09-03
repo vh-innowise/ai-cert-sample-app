@@ -20,7 +20,10 @@ COPY apps/frontend/package.json ./apps/frontend/package.json
 RUN npm ci
 
 COPY apps/backend/prisma ./apps/backend/prisma
-COPY apps/backend/prisma.config.ts ./apps/backend/prisma.config.ts
+# Deliberately not copying prisma.config.ts here (matches Dockerfile.dev): its `env("DATABASE_URL")`
+# helper validates the var eagerly at config-load time, but DATABASE_URL only exists at container
+# runtime, not at image build time. Without the config file, `generate` falls back to Prisma's
+# schema-path/migrations-path defaults, which already match this repo's layout.
 # Run from apps/backend so engine paths are cwd-relative, matching native db:init/db:setup.
 RUN cd apps/backend && npx prisma generate
 # On this Prisma version (6.19.3), `prisma generate` emits ".ts"-extension relative
