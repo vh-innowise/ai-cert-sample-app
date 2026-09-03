@@ -1,0 +1,23 @@
+# Routes the external nginx VM's proxied traffic (infra/nginx-vm is the sample-app-specific
+# reference; the actually-provisioned VM lives in the sibling ansible repo's nginx_reverse_proxy
+# role) into the frontend Service via k3s's built-in Traefik ingress. Host matches the wildcard
+# SAN (*.k3s.local.test) issued by that role — see its README for the certificate/domain setup.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sample-app
+  labels:
+    app: sample-app
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sample-app.k3s.local.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
