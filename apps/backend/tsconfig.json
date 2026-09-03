@@ -23,6 +23,10 @@
   },
   "ts-node": {
     "transpileOnly": true,
-    "experimentalResolver": true
+    "experimentalResolver": true,
+    "compilerOptions": {
+      "module": "commonjs",
+      "moduleResolution": "node"
+    }
   }
 }
