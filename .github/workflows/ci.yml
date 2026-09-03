@@ -104,7 +104,7 @@ jobs:
 
       # --- Trivy report pass: always runs, every severity, never blocks (FR-007) ---
       - name: Trivy report - backend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.APP_NAME }}-backend:${{ github.sha }}
           format: sarif
@@ -114,7 +114,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Trivy report - frontend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.APP_NAME }}-frontend:${{ github.sha }}
           format: sarif
@@ -139,7 +139,7 @@ jobs:
 
       # --- Trivy gate pass: CRITICAL only, blocks the job (and thus publish) on failure (FR-006) ---
       - name: Trivy CRITICAL gate - backend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.APP_NAME }}-backend:${{ github.sha }}
           severity: CRITICAL
@@ -147,7 +147,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Trivy CRITICAL gate - frontend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.APP_NAME }}-frontend:${{ github.sha }}
           severity: CRITICAL
