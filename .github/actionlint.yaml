@@ -1,0 +1,5 @@
+self-hosted-runner:
+  # Custom label for the self-hosted runner that deploys to the local k3s cluster
+  # (see deploy/README.md and .github/workflows/deploy.yml).
+  labels:
+    - k3s-local
