@@ -1,3 +1,18 @@
 # Trivy vulnerability-scan exceptions (User Story 1, .github/workflows/ci.yml).
 # Empty by default — add a CVE ID per line with a comment explaining why it's accepted
 # (e.g. "CVE-2024-XXXXX # no fix available upstream yet, tracked in issue #123").
+
+# perl-base ships with the node:22-slim base image; the app never invokes perl, so these
+# aren't reachable through our attack surface, and none has a fixed version to upgrade to.
+CVE-2026-13221 # perl-base, no fixed version upstream; perl unused by the app
+CVE-2026-42496 # perl-base, fix_deferred upstream; perl unused by the app
+CVE-2026-8376  # perl-base, 32-bit-only heap overflow; our image is amd64 and perl is unused
+
+# zlib1g: Debian's own advisory marks this will_not_fix — the vulnerable code path is in the
+# minizip contrib utility, which isn't part of the shipped zlib1g binary.
+CVE-2023-45853 # zlib1g, Debian will_not_fix — affects minizip contrib code, not the shipped lib
+
+# tar: bundled inside npm's own node_modules (node_modules/npm/node_modules/tar), not an
+# application dependency — pulled in by npm CLI, not our package.json. A fix exists (7.5.19)
+# but it ships with npm itself; will clear once the node:22-slim base image bundles a newer npm.
+CVE-2026-59873 # npm-internal tar dependency, not app code; fix pending upstream npm/node image bump
